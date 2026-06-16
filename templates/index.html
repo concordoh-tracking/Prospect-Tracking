@@ -46,6 +46,17 @@
     }
     #search:focus { outline: none; border-color: #2e6b4f; }
 
+    #month-select {
+      padding: 5px 10px;
+      font-size: 0.85rem;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      background: white;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    #month-select:focus { outline: none; border-color: #2e6b4f; }
+
     .filter-row {
       display: flex;
       flex-wrap: wrap;
@@ -202,8 +213,10 @@
       </div>
 
       <div class="filter-row" id="month-filters" style="display:none">
-        <label>Month</label>
-        <!-- populated dynamically -->
+        <label for="month-select">Month</label>
+        <select id="month-select">
+          <option value="">All months</option>
+        </select>
       </div>
     </div>
 
@@ -245,13 +258,13 @@
     }
   }
 
-  // ── Build month filter chips from all items ─────────────────────────────
+  // ── Build month dropdown from all items ────────────────────────────────
   function buildMonthFilters(items) {
     const seen = new Set();
     const months = [];
     items.forEach(item => {
       const [m, , y] = item.due_date.split("/");
-      const key = `${y}-${m.padStart(2,"0")}`;
+      const key = `${y}-${m.padStart(2, "0")}`;
       if (!seen.has(key)) {
         seen.add(key);
         const label = new Date(y, m - 1, 1).toLocaleString("default", { month: "long", year: "numeric" });
@@ -260,23 +273,19 @@
     });
 
     const row = document.getElementById("month-filters");
+    const select = document.getElementById("month-select");
+
     if (!months.length) { row.style.display = "none"; return; }
 
-    // "All months" chip + one per month
-    let html = `<button class="chip active overdue-chip" data-month="">All months</button>`;
+    select.innerHTML = `<option value="">All months</option>`;
     months.forEach(({ key, label }) => {
-      html += `<button class="chip overdue-chip" data-month="${key}">${label}</button>`;
+      select.innerHTML += `<option value="${key}">${label}</option>`;
     });
-    row.style.display = "flex";
-    row.innerHTML = `<label>Month</label>` + html;
 
-    row.querySelectorAll("button.chip").forEach(btn => {
-      btn.addEventListener("click", () => {
-        row.querySelectorAll("button.chip").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        activeMonth = btn.dataset.month || null;
-        applyFilters();
-      });
+    row.style.display = "flex";
+    select.addEventListener("change", () => {
+      activeMonth = select.value || null;
+      applyFilters();
     });
   }
 
