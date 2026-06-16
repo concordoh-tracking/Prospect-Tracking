@@ -323,6 +323,8 @@
         <button class="chip active" data-filter="all">All</button>
         <button class="chip" data-filter="not-contacted">Not yet contacted</button>
         <button class="chip" data-filter="contacted">Contacted</button>
+        <button class="chip" data-filter="contacted-once">Contacted once</button>
+        <button class="chip" data-filter="contacted-twice">Contacted twice</button>
       </div>
 
       <div class="filter-row" id="month-filters" style="display:none">
@@ -421,18 +423,19 @@
       return true;
     }
 
-    const showContacted = activeFilter !== "not-contacted";
-    const dueTodayFiltered = allDueToday.filter(item => {
-      if (activeFilter === "not-contacted" && item.contacts_made !== 0) return false;
-      if (activeFilter === "contacted"     && item.contacts_made === 0) return false;
-      return matches(item);
-    });
-    const overdueFiltered = allOverdue.filter(item => {
-      if (activeFilter === "not-contacted" && item.contacts_made !== 0) return false;
-      if (activeFilter === "contacted"     && item.contacts_made === 0) return false;
-      return matches(item);
-    });
-    const contactedFiltered = showContacted ? allContacted.filter(matches) : [];
+    function contactsMatch(n) {
+      if (activeFilter === "not-contacted")  return n === 0;
+      if (activeFilter === "contacted")      return n > 0;
+      if (activeFilter === "contacted-once") return n === 1;
+      if (activeFilter === "contacted-twice")return n === 2;
+      return true; // "all"
+    }
+
+    const dueTodayFiltered = allDueToday.filter(i  => contactsMatch(i.contacts_made)  && matches(i));
+    const overdueFiltered  = allOverdue.filter(i   => contactsMatch(i.contacts_made)  && matches(i));
+    const contactedFiltered = activeFilter === "not-contacted"
+      ? []
+      : allContacted.filter(i => contactsMatch(i.contacts_made) && matches(i));
 
     renderList("today-list", dueTodayFiltered, false);
     renderOverdueByMonth("overdue-list", overdueFiltered);
