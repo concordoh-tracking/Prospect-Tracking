@@ -522,6 +522,8 @@
     const textarea = document.querySelector(`textarea[data-row="${row}"][data-col="${col}"]`);
     const text = textarea.value.trim();
     if (!text) { textarea.focus(); return; }
+    const ts = new Date().toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+    const stamped = `[${ts}] ${text}`;
 
     btn.disabled = true;
     btn.textContent = "Saving…";
@@ -529,7 +531,7 @@
       const res = await fetch("/api/result", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ row_index: row, result_col_index: col, result_text: text }),
+        body: JSON.stringify({ row_index: row, result_col_index: col, result_text: stamped }),
       });
       if (!res.ok) throw new Error(await res.text());
       document.getElementById(`saved-${row}-${col}`).style.display = "block";
