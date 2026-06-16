@@ -77,24 +77,33 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
 
     today = date.today()
 
-    fu1_due    = parse_date(cell(COL_FU1_DATE)) or (visit_date + timedelta(days=3))
-    fu1_result = cell(COL_FU1_RESULT)
-    fu2_due    = parse_date(cell(COL_FU2_DATE)) or (fu1_due + timedelta(days=7))
-    fu2_result = cell(COL_FU2_RESULT)
-    fu3_due    = parse_date(cell(COL_FU3_DATE)) or (fu2_due + timedelta(days=7))
-    fu3_result = cell(COL_FU3_RESULT)
+    fu1_date_raw = cell(COL_FU1_DATE)
+    fu1_due      = parse_date(fu1_date_raw) or (visit_date + timedelta(days=3))
+    fu1_result   = cell(COL_FU1_RESULT)
+    # Done if result logged OR a manual date was set that has already passed
+    fu1_done     = bool(fu1_result) or (bool(fu1_date_raw) and fu1_due <= today)
 
-    contacts_made = sum(1 for r in [fu1_result, fu2_result, fu3_result] if r)
+    fu2_date_raw = cell(COL_FU2_DATE)
+    fu2_due      = parse_date(fu2_date_raw) or (fu1_due + timedelta(days=7))
+    fu2_result   = cell(COL_FU2_RESULT)
+    fu2_done     = bool(fu2_result) or (bool(fu2_date_raw) and fu2_due <= today)
+
+    fu3_date_raw = cell(COL_FU3_DATE)
+    fu3_due      = parse_date(fu3_date_raw) or (fu2_due + timedelta(days=7))
+    fu3_result   = cell(COL_FU3_RESULT)
+    fu3_done     = bool(fu3_result) or (bool(fu3_date_raw) and fu3_due <= today)
+
+    contacts_made = sum(1 for d in [fu1_done, fu2_done, fu3_done] if d)
     last_result   = fu3_result or fu2_result or fu1_result
 
     followups = [
-        (1, fu1_due, fu1_result, COL_FU1_RESULT),
-        (2, fu2_due, fu2_result, COL_FU2_RESULT),
-        (3, fu3_due, fu3_result, COL_FU3_RESULT),
+        (1, fu1_due, fu1_done, COL_FU1_RESULT),
+        (2, fu2_due, fu2_done, COL_FU2_RESULT),
+        (3, fu3_due, fu3_done, COL_FU3_RESULT),
     ]
 
-    for num, due, result, result_col in followups:
-        if result:
+    for num, due, done, result_col in followups:
+        if done:
             continue
 
         base = {
@@ -116,7 +125,7 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
         else:
             return None
 
-    # All three follow-ups complete
+    # All three follow-ups complete (fu1_done, fu2_done, fu3_done all true)
     if contacts_made > 0:
         return {
             "row_index":        row_index,
