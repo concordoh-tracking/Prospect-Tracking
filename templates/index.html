@@ -98,8 +98,9 @@
       padding-bottom: 6px;
       border-bottom: 2px solid #d0d0c8;
     }
-    .section-title.overdue { color: #b33a3a; border-color: #e8b0b0; }
-    .section-title.today   { color: #2e6b4f; border-color: #a8d4be; }
+    .section-title.overdue    { color: #b33a3a; border-color: #e8b0b0; }
+    .section-title.today      { color: #2e6b4f; border-color: #a8d4be; }
+    .section-title.contacted  { color: #1a6b8a; border-color: #a0cfe0; }
 
     .month-label {
       font-size: 0.8rem;
@@ -232,6 +233,37 @@
     }
     .overdue-row-detail .saved-msg { font-size: 0.78rem; color: #2e6b4f; font-weight: 600; display: none; margin-top: 4px; }
 
+    /* ── Contacted accordion rows ────────────────────────────────────────── */
+    .contacted-row {
+      background: white;
+      border-left: 4px solid #1a6b8a;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+    .contacted-row-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .contacted-row-summary:hover { background: #f5fafd; }
+    .contacted-row-summary .row-name { font-weight: 700; font-size: 0.9rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .contacted-row-summary .row-next { font-size: 0.75rem; color: #1a6b8a; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+    .contacted-row.open .chevron { transform: rotate(180deg); }
+    .contacted-row-detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px solid #eaf4f8;
+    }
+    .contacted-row.open .contacted-row-detail { display: block; }
+    .contacted-row-detail .detail-meta { font-size: 0.8rem; color: #666; margin: 8px 0 6px; }
+    .contacted-row-detail .detail-meta span { margin-right: 14px; }
+    .contacted-row-detail .last-result { font-size: 0.8rem; color: #444; font-style: italic; }
+
     textarea {
       width: 100%;
       font-size: 0.82rem;
@@ -306,12 +338,16 @@
 
     <div class="section-title overdue">Overdue</div>
     <div id="overdue-list"></div>
+
+    <div class="section-title contacted">Contacted</div>
+    <div id="contacted-list"></div>
   </div>
 </main>
 
 <script>
-  let allDueToday = [];
-  let allOverdue  = [];
+  let allDueToday  = [];
+  let allOverdue   = [];
+  let allContacted = [];
   let activeFilter = "all";
   let activeMonth  = null;   // "YYYY-MM" string or null for all
 
@@ -326,10 +362,11 @@
       document.getElementById("spinner").style.display = "none";
       document.getElementById("content").style.display = "block";
 
-      allDueToday = data.due_today;
-      allOverdue  = data.overdue;
+      allDueToday  = data.due_today;
+      allOverdue   = data.overdue;
+      allContacted = data.contacted;
 
-      buildMonthFilters([...allDueToday, ...allOverdue]);
+      buildMonthFilters([...allDueToday, ...allOverdue, ...allContacted]);
       applyFilters();
     } catch (e) {
       document.getElementById("spinner").style.display = "none";
@@ -376,8 +413,6 @@
 
     function matches(item) {
       if (search && !item.name.toLowerCase().includes(search)) return false;
-      if (activeFilter === "not-contacted" && item.contacts_made !== 0) return false;
-      if (activeFilter === "contacted"     && item.contacts_made === 0) return false;
       if (activeMonth) {
         const [m, , y] = item.due_date.split("/");
         const key = `${y}-${m.padStart(2,"0")}`;
@@ -386,8 +421,22 @@
       return true;
     }
 
-    renderList("today-list", allDueToday.filter(matches), false);
-    renderOverdueByMonth("overdue-list", allOverdue.filter(matches));
+    const showContacted = activeFilter !== "not-contacted";
+    const dueTodayFiltered = allDueToday.filter(item => {
+      if (activeFilter === "not-contacted" && item.contacts_made !== 0) return false;
+      if (activeFilter === "contacted"     && item.contacts_made === 0) return false;
+      return matches(item);
+    });
+    const overdueFiltered = allOverdue.filter(item => {
+      if (activeFilter === "not-contacted" && item.contacts_made !== 0) return false;
+      if (activeFilter === "contacted"     && item.contacts_made === 0) return false;
+      return matches(item);
+    });
+    const contactedFiltered = showContacted ? allContacted.filter(matches) : [];
+
+    renderList("today-list", dueTodayFiltered, false);
+    renderOverdueByMonth("overdue-list", overdueFiltered);
+    renderContactedSection("contacted-list", contactedFiltered);
   }
 
   // ── Render helpers ──────────────────────────────────────────────────────
@@ -511,6 +560,48 @@
             Save Result
           </button>
           <span class="saved-msg" id="saved-${item.row_index}-${item.result_col_index}">Saved!</span>
+        </div>
+      </div>`;
+  }
+
+  // ── Contacted section ──────────────────────────────────────────────────
+  function renderContactedSection(containerId, items) {
+    const el = document.getElementById(containerId);
+    if (!items.length) {
+      el.innerHTML = '<p class="empty">None right now.</p>';
+      return;
+    }
+    el.innerHTML = items.map(item => contactedRowHTML(item)).join("");
+    el.querySelectorAll(".contacted-row-summary").forEach(summary => {
+      summary.addEventListener("click", () => {
+        summary.closest(".contacted-row").classList.toggle("open");
+      });
+    });
+  }
+
+  function contactedRowHTML(item) {
+    const nextLabel = item.followup_num === null
+      ? "All follow-ups complete"
+      : `Next FU #${item.followup_num} due ${esc(item.due_date)}`;
+    const lastSnippet = item.last_result.length > 60
+      ? item.last_result.slice(0, 60) + "…"
+      : item.last_result;
+    return `
+      <div class="contacted-row">
+        <div class="contacted-row-summary">
+          <span class="row-name">${esc(item.name)}</span>
+          <div class="row-badges">
+            ${contactedLabel(item.contacts_made)}
+          </div>
+          <span class="row-next">${nextLabel}</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="contacted-row-detail">
+          <div class="detail-meta">
+            <span>Visit: ${esc(item.visit_date)}</span>
+            <span>Provider: ${esc(item.provider)}</span>
+          </div>
+          <div class="last-result">Last contact: ${esc(lastSnippet)}</div>
         </div>
       </div>`;
   }

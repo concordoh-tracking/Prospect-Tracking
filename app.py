@@ -64,7 +64,6 @@ def parse_date(value: str) -> Optional[date]:
 
 
 def compute_followups(row: list, row_index: int) -> Optional[dict]:
-    """Return a follow-up dict if this prospect needs a call today or is overdue."""
     def cell(i):
         return row[i].strip() if i < len(row) and row[i] else ""
 
@@ -78,25 +77,16 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
 
     today = date.today()
 
-    # Determine due dates
-    fu1_due = parse_date(cell(COL_FU1_DATE)) or (visit_date + timedelta(days=3))
+    fu1_due    = parse_date(cell(COL_FU1_DATE)) or (visit_date + timedelta(days=3))
     fu1_result = cell(COL_FU1_RESULT)
-
-    fu2_due = parse_date(cell(COL_FU2_DATE))
-    if fu1_result and not fu2_due:
-        fu2_due = fu1_due + timedelta(days=7)
-    elif not fu2_due:
-        fu2_due = fu1_due + timedelta(days=7)
+    fu2_due    = parse_date(cell(COL_FU2_DATE)) or (fu1_due + timedelta(days=7))
     fu2_result = cell(COL_FU2_RESULT)
-
-    fu3_due = parse_date(cell(COL_FU3_DATE))
-    if fu2_result and not fu3_due:
-        fu3_due = fu2_due + timedelta(days=7)
-    elif not fu3_due:
-        fu3_due = fu2_due + timedelta(days=7)
+    fu3_due    = parse_date(cell(COL_FU3_DATE)) or (fu2_due + timedelta(days=7))
     fu3_result = cell(COL_FU3_RESULT)
 
-    # Walk through follow-ups in order; find the first incomplete one
+    contacts_made = sum(1 for r in [fu1_result, fu2_result, fu3_result] if r)
+    last_result   = fu3_result or fu2_result or fu1_result
+
     followups = [
         (1, fu1_due, fu1_result, COL_FU1_RESULT),
         (2, fu2_due, fu2_result, COL_FU2_RESULT),
@@ -105,31 +95,44 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
 
     for num, due, result, result_col in followups:
         if result:
-            continue  # this follow-up is done
+            continue
 
-        # For FU2 and FU3, only surface them if the previous one is done
-        if num == 2 and not fu1_result:
+        base = {
+            "row_index":      row_index,
+            "name":           cell(COL_NAME),
+            "visit_date":     visit_date.strftime("%m/%d/%Y"),
+            "provider":       cell(COL_PROVIDER),
+            "followup_num":   num,
+            "contacts_made":  contacts_made,
+            "last_result":    last_result,
+            "due_date":       due.strftime("%m/%d/%Y"),
+            "result_col_index": result_col,
+        }
+
+        if due <= today:
+            return {**base, "status": "due", "days_overdue": (today - due).days}
+        elif contacts_made > 0:
+            return {**base, "status": "pending", "days_overdue": 0}
+        else:
             return None
-        if num == 3 and not fu2_result:
-            return None
 
-        if due and due <= today:
-            days_overdue = (today - due).days
-            return {
-                "row_index": row_index,
-                "name": cell(COL_NAME),
-                "visit_date": visit_date.strftime("%m/%d/%Y"),
-                "provider": cell(COL_PROVIDER),
-                "followup_num": num,
-                "contacts_made": num - 1,
-                "due_date": due.strftime("%m/%d/%Y"),
-                "days_overdue": days_overdue,
-                "result_col_index": result_col,
-            }
-        # Due date is in the future — no action needed yet
-        return None
+    # All three follow-ups complete
+    if contacts_made > 0:
+        return {
+            "row_index":        row_index,
+            "name":             cell(COL_NAME),
+            "visit_date":       visit_date.strftime("%m/%d/%Y"),
+            "provider":         cell(COL_PROVIDER),
+            "followup_num":     None,
+            "contacts_made":    contacts_made,
+            "last_result":      last_result,
+            "due_date":         fu3_due.strftime("%m/%d/%Y"),
+            "result_col_index": None,
+            "status":           "complete",
+            "days_overdue":     0,
+        }
 
-    return None  # all three follow-ups completed
+    return None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -152,24 +155,29 @@ async def get_followups():
 
     today = date.today()
     due_today = []
-    overdue = []
+    overdue   = []
+    contacted = []
 
     for i, row in enumerate(rows):
-        sheet_row = i + 3   # data starts at row 3 in the sheet
+        sheet_row = i + 3
         entry = compute_followups(row, sheet_row)
         if entry is None:
             continue
-        if entry["days_overdue"] == 0:
-            due_today.append(entry)
+        if entry["status"] == "due":
+            if entry["days_overdue"] == 0:
+                due_today.append(entry)
+            else:
+                overdue.append(entry)
         else:
-            overdue.append(entry)
+            contacted.append(entry)
 
-    overdue.sort(key=lambda x: x["days_overdue"], reverse=False)
+    overdue.sort(key=lambda x: x["days_overdue"])
 
     return {
-        "today": today.strftime("%B %d, %Y"),
+        "today":     today.strftime("%B %d, %Y"),
         "due_today": due_today,
-        "overdue": overdue,
+        "overdue":   overdue,
+        "contacted": contacted,
     }
 
 
