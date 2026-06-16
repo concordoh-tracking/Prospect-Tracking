@@ -109,6 +109,16 @@
 
     .saved-msg { font-size: 0.78rem; color: #2e6b4f; font-weight: 600; display: none; }
 
+    .month-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #b33a3a;
+      margin: 16px 0 8px;
+      padding-left: 2px;
+    }
+
     #spinner {
       text-align: center;
       padding: 60px;
@@ -140,11 +150,11 @@
   <div id="spinner">Loading follow-ups…</div>
   <div id="error-msg"></div>
   <div id="content" style="display:none">
-    <div class="section-title overdue">Overdue</div>
-    <div id="overdue-list"></div>
-
     <div class="section-title today">Due Today</div>
     <div id="today-list"></div>
+
+    <div class="section-title overdue">Overdue</div>
+    <div id="overdue-list"></div>
   </div>
 </main>
 
@@ -159,8 +169,8 @@
       document.getElementById("spinner").style.display = "none";
       document.getElementById("content").style.display = "block";
 
-      renderList("overdue-list", data.overdue, true);
       renderList("today-list", data.due_today, false);
+      renderOverdueByMonth("overdue-list", data.overdue);
     } catch (e) {
       document.getElementById("spinner").style.display = "none";
       const err = document.getElementById("error-msg");
@@ -176,6 +186,34 @@
       return;
     }
     el.innerHTML = items.map(item => cardHTML(item, isOverdue)).join("");
+    el.querySelectorAll(".save-btn").forEach(btn => {
+      btn.addEventListener("click", () => saveResult(btn));
+    });
+  }
+
+  function renderOverdueByMonth(containerId, items) {
+    const el = document.getElementById(containerId);
+    if (!items.length) {
+      el.innerHTML = '<p class="empty">None right now.</p>';
+      return;
+    }
+
+    // Group by "Month YYYY" derived from due_date (MM/DD/YYYY)
+    const groups = {};
+    const order = [];
+    items.forEach(item => {
+      const [m, , y] = item.due_date.split("/");
+      const label = new Date(y, m - 1, 1).toLocaleString("default", { month: "long", year: "numeric" });
+      if (!groups[label]) { groups[label] = []; order.push(label); }
+      groups[label].push(item);
+    });
+
+    let html = "";
+    order.forEach(month => {
+      html += `<div class="month-label">${month}</div>`;
+      html += groups[month].map(item => cardHTML(item, true)).join("");
+    });
+    el.innerHTML = html;
     el.querySelectorAll(".save-btn").forEach(btn => {
       btn.addEventListener("click", () => saveResult(btn));
     });
