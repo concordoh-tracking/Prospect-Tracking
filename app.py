@@ -68,13 +68,8 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
     def cell(i):
         return row[i].strip() if i < len(row) and row[i] else ""
 
-    potential = cell(COL_POTENTIAL).upper()
-    if potential != "Y":
-        return None
-
     signed_up = cell(COL_SIGNED_UP).upper()
-    NOT_SIGNED_UP = {"", "N", "NO"}
-    if signed_up not in NOT_SIGNED_UP:
+    if signed_up in ("Y", "YES"):
         return None
 
     visit_date = parse_date(cell(COL_VISIT_DATE))
