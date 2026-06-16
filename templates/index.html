@@ -113,7 +113,7 @@
 
     .empty { color: #888; font-style: italic; padding: 10px 0; }
 
-    /* ── Cards ──────────────────────────────────────────────────────────── */
+    /* ── Due Today cards (full size) ───────────────────────────────────── */
     .card {
       background: white;
       border-radius: 8px;
@@ -125,8 +125,7 @@
       gap: 10px 16px;
       align-items: start;
     }
-    .card.overdue { border-left: 4px solid #c0392b; }
-    .card.today   { border-left: 4px solid #2e6b4f; }
+    .card.today { border-left: 4px solid #2e6b4f; }
 
     .client-name { font-weight: 700; font-size: 1.05rem; }
     .meta { font-size: 0.82rem; color: #666; margin-top: 3px; }
@@ -150,6 +149,88 @@
     .card-action { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 210px; }
 
     .overdue-label { font-size: 0.8rem; color: #b33a3a; font-weight: 600; }
+
+    /* ── Overdue accordion rows (condensed) ─────────────────────────────── */
+    .overdue-row {
+      background: white;
+      border-left: 4px solid #c0392b;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+
+    .overdue-row-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .overdue-row-summary:hover { background: #fdf5f5; }
+
+    .overdue-row-summary .row-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .overdue-row-summary .row-badges {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .overdue-row-summary .row-overdue {
+      font-size: 0.75rem;
+      color: #b33a3a;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .chevron {
+      font-size: 0.75rem;
+      color: #aaa;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .overdue-row.open .chevron { transform: rotate(180deg); }
+
+    .overdue-row-detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px solid #f3eded;
+    }
+    .overdue-row.open .overdue-row-detail { display: block; }
+
+    .overdue-row-detail .detail-meta {
+      font-size: 0.8rem;
+      color: #666;
+      margin: 8px 0 10px;
+    }
+    .overdue-row-detail .detail-meta span { margin-right: 14px; }
+
+    .overdue-row-detail .detail-actions {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .overdue-row-detail .detail-actions textarea {
+      flex: 1;
+      min-height: 44px;
+    }
+    .overdue-row-detail .detail-actions .save-btn {
+      white-space: nowrap;
+      width: auto;
+      padding: 7px 14px;
+    }
+    .overdue-row-detail .saved-msg { font-size: 0.78rem; color: #2e6b4f; font-weight: 600; display: none; margin-top: 4px; }
 
     textarea {
       width: 100%;
@@ -339,12 +420,56 @@
     let html = "";
     order.forEach(month => {
       html += `<div class="month-label">${month}</div>`;
-      html += groups[month].map(item => cardHTML(item, true)).join("");
+      html += groups[month].map(item => overdueRowHTML(item)).join("");
     });
     el.innerHTML = html;
-    el.querySelectorAll(".save-btn").forEach(btn => {
-      btn.addEventListener("click", () => saveResult(btn));
+
+    // Wire up accordion toggles
+    el.querySelectorAll(".overdue-row-summary").forEach(summary => {
+      summary.addEventListener("click", () => {
+        summary.closest(".overdue-row").classList.toggle("open");
+      });
     });
+    el.querySelectorAll(".save-btn").forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); saveResult(btn); });
+    });
+  }
+
+  function overdueRowHTML(item) {
+    const daysLabel = item.days_overdue === 0 ? "Due today"
+      : `${item.days_overdue} day${item.days_overdue !== 1 ? "s" : ""} overdue`;
+    return `
+      <div class="overdue-row">
+        <div class="overdue-row-summary">
+          <span class="row-name">${esc(item.name)}</span>
+          <div class="row-badges">
+            <span class="badge ${fuBadgeClass(item.followup_num)}">FU #${item.followup_num}</span>
+            ${contactedLabel(item.contacts_made)}
+          </div>
+          <span class="row-overdue">${daysLabel}</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="overdue-row-detail">
+          <div class="detail-meta">
+            <span>Visit: ${esc(item.visit_date)}</span>
+            <span>Provider: ${esc(item.provider)}</span>
+            <span>Due: ${esc(item.due_date)}</span>
+          </div>
+          <div class="detail-actions">
+            <textarea
+              placeholder="Log result (e.g. Left voicemail, will call back Thursday)"
+              data-row="${item.row_index}"
+              data-col="${item.result_col_index}"
+            ></textarea>
+            <button class="save-btn"
+              data-row="${item.row_index}"
+              data-col="${item.result_col_index}">
+              Save Result
+            </button>
+          </div>
+          <span class="saved-msg" id="saved-${item.row_index}-${item.result_col_index}">Saved!</span>
+        </div>
+      </div>`;
   }
 
   function contactedLabel(n) {
