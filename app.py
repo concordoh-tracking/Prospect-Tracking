@@ -84,7 +84,7 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
     today = date.today()
 
     # Determine due dates
-    fu1_due = parse_date(cell(COL_FU1_DATE)) or (visit_date + timedelta(days=2))
+    fu1_due = parse_date(cell(COL_FU1_DATE)) or (visit_date + timedelta(days=3))
     fu1_result = cell(COL_FU1_RESULT)
 
     fu2_due = parse_date(cell(COL_FU2_DATE))
@@ -121,14 +121,15 @@ def compute_followups(row: list, row_index: int) -> Optional[dict]:
         if due and due <= today:
             days_overdue = (today - due).days
             return {
-                "row_index": row_index,          # 1-based sheet row
+                "row_index": row_index,
                 "name": cell(COL_NAME),
                 "visit_date": visit_date.strftime("%m/%d/%Y"),
                 "provider": cell(COL_PROVIDER),
                 "followup_num": num,
+                "contacts_made": num - 1,
                 "due_date": due.strftime("%m/%d/%Y"),
                 "days_overdue": days_overdue,
-                "result_col_index": result_col,  # 0-based column index
+                "result_col_index": result_col,
             }
         # Due date is in the future — no action needed yet
         return None
@@ -168,7 +169,7 @@ async def get_followups():
         else:
             overdue.append(entry)
 
-    overdue.sort(key=lambda x: x["days_overdue"], reverse=True)
+    overdue.sort(key=lambda x: x["days_overdue"], reverse=False)
 
     return {
         "today": today.strftime("%B %d, %Y"),
